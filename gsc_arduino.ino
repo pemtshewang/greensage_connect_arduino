@@ -26,6 +26,9 @@ const char * mqtt_server = "192.168.12.82";
 const char * mqtt_username = "admin";
 const char * mqtt_password = "$10Bpemtshewang";
 const int mqtt_port = 1883;
+static
+String controllerBrokerId = "20cb8c63-c";
+unsigned long lastMqttPublishTime = 0;
 
 // pin config
 const int lightPin = 2;
@@ -73,7 +76,6 @@ void checkSlot(int slotNumber) {
   DateTime now = rtc.now();
   int currentDay = now.dayOfTheWeek();
   char currentTimeStr[9];
-  Serial.println("Current time: " + String(currentTimeStr));
   // ignores seconds
   sprintf(currentTimeStr, "%02d:%02d", now.hour(), now.minute());
 
@@ -194,7 +196,12 @@ void callback(char * topic, byte * payload, unsigned int length) {
     receivedPayload += (char) payload[i];
   }
   Serial.println("Received topic: " + receivedTopic);
-  handleDeviceControl(receivedTopic, receivedPayload);
+  int lastSlashIndex = receivedTopic.lastIndexOf('/');
+  // the recieved topic will be in the format of "controllerId/deviceId"
+  // split and get the deviceId
+  Serial.println("Received deviceid: " + receivedTopic.substring(lastSlashIndex + 1));
+  Serial.println("Received payload: " + receivedPayload);
+  handleDeviceControl(receivedTopic.substring(lastSlashIndex + 1), receivedPayload);
 }
 
 void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
@@ -261,13 +268,8 @@ void reconnect() {
     // Attempt to connect
     if (client.connect(clientId.c_str(), mqtt_username, mqtt_password)) {
       Serial.println("connected!");
-      client.subscribe("light");
-      client.subscribe("ventilationFan");
-      client.subscribe("waterValve");
-      client.subscribe("rollerShutterLeft");
-      client.subscribe("rollerShutterRight");
-      client.subscribe("schedule");
-      client.subscribe("scheduleClear");
+      // subscribe to every topic
+      client.subscribe((controllerBrokerId + "/#").c_str());
     } else {
       Serial.print("failed, rc = ");
       Serial.print(client.state());
@@ -355,7 +357,6 @@ void loop() {
     digitalWrite(rightVentilationRollerShutterPinDown, LOW);
     digitalWrite(leftVentilationRollerShutterPinDown, LOW);
   }
-  Serial.println("Temperature: " + String(temperature));
 
   if (temperature < tempThreshold || humidity < humThreshold) {
     if (!isFanManuallyOn) {
@@ -384,5 +385,16 @@ void loop() {
     }
     lastReadingTime = currentTime;
   }
-  delay(1000);
+  if (currentTime - lastMqttPublishTime >= 60 * 1000) {
+    int soilMoisture = getMoisturePercentage(analogRead(soilMoisturePin));
+    if (!isnan(temperature) && !isnan(humidity) && !isnan(soilMoisture)) {
+      String mqttMessage = "temperature:" + String(temperature) +
+        "|humidity:" + String(humidity) +
+        "|soilMoisture:" + String(soilMoisture);
+      client.publish(controllerBrokerId.c_str(), mqttMessage.c_str());
+      lastMqttPublishTime = currentTime;
+    } else {
+      Serial.println("Failed to read from DHT sensor!");
+    }
+  }
 }
