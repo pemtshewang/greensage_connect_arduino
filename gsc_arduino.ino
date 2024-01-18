@@ -142,15 +142,22 @@ void handleDeviceControl(const String & topic,
     isWaterValveManuallyOn = message == "open";
     digitalWrite(waterValvePin, (message == "open") ? HIGH : LOW);
   } else if (topic == "schedule") {
-    String scheduleInfo = message.substring(9); // Skip "schedule|"
-    int firstDelimiterPos = scheduleInfo.indexOf('|');
-    int secondDelimiterPos = scheduleInfo.indexOf('|', firstDelimiterPos + 1);
-    int thirdDelimiterPos = scheduleInfo.indexOf('|', secondDelimiterPos + 1);
+    // Assuming scheduleInfo is "1|15:35:00|15:36:00|5"
+    // Extracting values using '|' as the delimiter
+    int firstDelimiterPos = message.indexOf('|');
+    int secondDelimiterPos = message.indexOf('|', firstDelimiterPos + 1);
+    int thirdDelimiterPos = message.indexOf('|', secondDelimiterPos + 1);
 
-    String slotNumber = scheduleInfo.substring(0, firstDelimiterPos);
-    String startTime = scheduleInfo.substring(firstDelimiterPos + 1, secondDelimiterPos);
-    String endTime = scheduleInfo.substring(secondDelimiterPos + 1, thirdDelimiterPos);
-    String repetitionDaysStr = scheduleInfo.substring(thirdDelimiterPos + 1);
+    String slotNumber = message.substring(0, firstDelimiterPos);
+    String startTime = message.substring(firstDelimiterPos + 1, secondDelimiterPos);
+    String endTime = message.substring(secondDelimiterPos + 1, thirdDelimiterPos);
+    String repetitionDaysStr = message.substring(thirdDelimiterPos + 1);
+
+    // Extracting values for the last part (repetitionDays)
+    int lastDelimiterPos = repetitionDaysStr.indexOf('|');
+    if (lastDelimiterPos != -1) {
+      repetitionDaysStr = repetitionDaysStr.substring(0, lastDelimiterPos);
+    }
 
     int repetitionDays = repetitionDaysStr.toInt(); // Convert repetitionDaysStr to an integer
 
@@ -163,16 +170,17 @@ void handleDeviceControl(const String & topic,
   } else if (topic == "scheduleClear") {
     clearSlot(message.toInt());
   } else if (topic == "rollerShutterLeft") {
-    if (message == "up") {
-      Serial.println("Left roller shutter up");
-      leftRollerShutterManuallyOn = true;
-      digitalWrite(leftVentilationRollerShutterPinUp, HIGH);
-      digitalWrite(leftVentilationRollerShutterPinDown, LOW);
-    } else {
-      leftRollerShutterManuallyOn = false;
-      Serial.println("Left roller shutter down");
-      digitalWrite(leftVentilationRollerShutterPinUp, LOW);
-      digitalWrite(leftVentilationRollerShutterPinDown, HIGH);
+     Serial.println("Left roller shutter is " + message);
+     if (message == "up") {
+        Serial.println("Left roller shutter up");
+        leftRollerShutterManuallyOn = true;
+        digitalWrite(leftVentilationRollerShutterPinUp, HIGH);
+        digitalWrite(leftVentilationRollerShutterPinDown, LOW);
+    } else if (message == "down") {
+        Serial.println("Left roller shutter down");
+        leftRollerShutterManuallyOn = false;
+        digitalWrite(leftVentilationRollerShutterPinUp, LOW);
+        digitalWrite(leftVentilationRollerShutterPinDown, HIGH);
     }
   } else if (topic == "rollerShutterRight") {
     if (message == "up") {
@@ -180,7 +188,7 @@ void handleDeviceControl(const String & topic,
       Serial.println("Right roller shutter up");
       digitalWrite(rightVentilationRollerShutterPinUp, HIGH);
       digitalWrite(rightVentilationRollerShutterPinDown, LOW);
-    } else {
+    } else if(message == "down"){
       rightRollerShutterManuallyOn = false;
       Serial.println("Right roller shutter down");
       digitalWrite(rightVentilationRollerShutterPinUp, LOW);
@@ -391,7 +399,7 @@ void loop() {
       String mqttMessage = "temperature:" + String(temperature) +
         "|humidity:" + String(humidity) +
         "|soilMoisture:" + String(soilMoisture);
-      client.publish(controllerBrokerId.c_str(), mqttMessage.c_str());
+      client.publish((controllerBrokerId+"readings").c_str(), mqttMessage.c_str());
       lastMqttPublishTime = currentTime;
     } else {
       Serial.println("Failed to read from DHT sensor!");
