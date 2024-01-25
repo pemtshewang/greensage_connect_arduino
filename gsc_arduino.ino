@@ -24,7 +24,7 @@ DHT dht(DHTPIN, DHT22);
 //---- HiveMQ Cloud Broker settings
 const char * mqtt_server = "192.168.12.82";
 const char * mqtt_username = "admin";
-const char * mqtt_password = "$10Bpemtshewang";
+const char * mqtt_password = "$35";
 const int mqtt_port = 1883;
 static
 String controllerBrokerId = "20cb8c63-c";
